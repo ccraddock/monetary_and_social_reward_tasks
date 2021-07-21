@@ -19,14 +19,16 @@ from __future__ import absolute_import, division
 
 from psychopy import locale_setup
 from psychopy import prefs
-from psychopy import sound, gui, visual, core, data, event, logging, clock, colors
+prefs.hardware['audioLib'] = ['PTB']
+from psychopy import gui, visual, core, data, event, logging, clock, colors
 from psychopy.constants import (NOT_STARTED, STARTED, PLAYING, PAUSED,
                                 STOPPED, FINISHED, PRESSED, RELEASED, FOREVER)
 
-import numpy as np  # whole numpy lib is available, prepend 'np.'
-from numpy import (sin, cos, tan, log, log10, pi, average,
-                   sqrt, std, deg2rad, rad2deg, linspace, asarray)
-from numpy.random import random, randint, normal, shuffle, choice as randchoice
+# import numpy as np  # whole numpy lib is available, prepend 'np.'
+# from numpy import (sin, cos, tan, log, log10, pi, average,
+#                    sqrt, std, deg2rad, rad2deg, linspace, asarray)
+# from numpy.random import random, randint, normal, shuffle, choice as randchoice
+from numpy.random import permutation, choice as randchoice
 import os  # handy system and path functions
 import sys  # to get file system encoding
 
@@ -39,7 +41,7 @@ from psychopy.hardware import keyboard
 ###
 ###############################################################################
 SCREEN_RESOLUTION = [1920, 1080]
-FULLSCREEN = False
+FULLSCREEN = True
 LEFT_RESPONSE = '1'  # this is the button to press for a 'lower' guess
 RIGHT_RESPONSE = '2'  # this is the butto to press for a 'higher' guess
 SCANNER_TRIGGER = '5'
@@ -351,9 +353,6 @@ def update_outcome(trial_type, response_value, components, reward=None):
 
     components.clear()
 
-    components.append({"component": card_outline, "component_name": "card_outline", "start_time": 0.0, "duration": 0.5})
-    components.append({"component": card_text, "component_name": "card_text", "start_time": 0.0, "duration": 0.5})
-
     reward = 0
     result_shape = no_change
 
@@ -361,11 +360,41 @@ def update_outcome(trial_type, response_value, components, reward=None):
 
     if not response_value:
         
-        card_value = np.random.choice(["1", "2", "3", "4", "5", "6", "7", "8", "9"])
-
         center_text.setText("No response!")
 
-        components.append({"component": center_text, "component_name": "center_text", "start_time": 0.51, "duration": 0.5})
+        components.append({"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 0.5})
+
+    else:
+
+        if trial_type == 1:
+            print(f"Setting result shape to win", file=sys.stderr)
+            reward = 1.0
+            result_shape = win_arrow
+
+        elif trial_type == 4:
+            print(f"Setting result shape to lose", file=sys.stderr)
+            reward = -0.5
+            result_shape = lose_arrow
+
+        components.append({"component": result_shape, "component_name": "result_shape", "start_time": 0.0, "duration": 0.5})
+
+    return components, reward
+
+def update_card(trial_type, response_value, components, reward=None):
+    """
+    There are 4 trial types:
+    1. reward, correct response, win arrow
+    2. reward, incorrect response, no change
+    3. loss, correct response, no change
+    4. loss, incorrect response, lose arrow
+
+    The users response and the trial type are used to determine the value of the chosen card to match
+    the desired outcome.  
+    """
+
+    if not response_value:
+        
+        card_value = randchoice(["1", "2", "3", "4", "5", "6", "7", "8", "9"])
 
     else:
         if trial_type in [1, 3]:
@@ -373,20 +402,15 @@ def update_outcome(trial_type, response_value, components, reward=None):
 
             if response_value == LEFT_RESPONSE:
                 # the chosen card value should be less than "5"
-                card_value = np.random.choice(["1", "2", "3", "4"])
+                card_value = randchoice(["1", "2", "3", "4"])
 
             elif response_value == RIGHT_RESPONSE:
                 # the chose card value should be greater than "5"
-                card_value = np.random.choice(["6", "7", "8", "9"])
+                card_value = randchoice(["6", "7", "8", "9"])
 
             else:
                 print(f"Incorrect response value {response_value}", file=sys.stderr)
                 raise ValueError
-
-            if trial_type == 1:
-                print(f"Setting result shape to win", file=sys.stderr)
-                reward = 1.0
-                result_shape = win_arrow
 
         elif trial_type in [2, 4]:
 
@@ -394,30 +418,24 @@ def update_outcome(trial_type, response_value, components, reward=None):
 
             if response_value == LEFT_RESPONSE:
                 # the chosen card value should be greater than "5"
-                card_value = np.random.choice(["6", "7", "8", "9"])
+                card_value = randchoice(["6", "7", "8", "9"])
 
             elif response_value == RIGHT_RESPONSE:
                 # the chose card value should be less than "5"
-                card_value = np.random.choice(["1", "2", "3", "4"])
+                card_value = randchoice(["1", "2", "3", "4"])
 
             else:
                 print(f"Incorrect response value {response_value}", file=sys.stderr)
                 raise ValueError
 
-            if trial_type == 4:
-                print(f"Setting result shape to lose", file=sys.stderr)
-                reward = -0.5
-                result_shape = lose_arrow
-
         else:
             print(f"Incorrect trial type {trial_type}", file=sys.stderr)
             raise ValueError
 
-        components.append({"component": result_shape, "component_name": "result_shape", "start_time": 0.51, "duration": 0.5})
-
     card_text.setText(card_value)
 
-    return components, reward
+    return components, 0.0
+
 
 def update_fixation(trial_type, response_value, components, reward=None):
     """
@@ -501,6 +519,7 @@ def update_waiting_on_scanner(trial_type, response_value, components, reward=Non
 ###############################################################################
 block_list = [
     {
+        "name": "instructions",
         "repetitions": 4,
         "trial_type_list": [1,2,3,4],
         "response_component": key_resp_2,
@@ -521,6 +540,7 @@ block_list = [
         ]
     },
     {
+        "name": "wait_for_scanner",
         "repetitions": 1,
         "trial_type_list": [],
         "response_component": key_resp_2,
@@ -540,6 +560,7 @@ block_list = [
         ]
     },
     {
+        "name": "pre_fixation",
         "repetitions": 1,
         "trial_type_list": [],
 
@@ -555,10 +576,11 @@ block_list = [
         ]
     },
     {
+        "name": "task_trial",
         "response_component": key_resp_2,
         "valid_responses": [LEFT_RESPONSE, RIGHT_RESPONSE],
         "repetitions": 24,
-        "trial_type_list": np.random.permutation([1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4]),
+        "trial_type_list": permutation([1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4]),
 
         "segments": [
             {
@@ -581,13 +603,20 @@ block_list = [
                 "update_components": update_anticipation
             },
             {
-                "name": "outcome",
+                "name": "show_card",
                 "components": [
                     {"component": card_outline, "component_name": "card_outline", "start_time": 0.0, "duration": 0.5},
                     {"component": card_text, "component_name": "card_text", "start_time": 0.0, "duration": 0.5},
-                    {"component": result_shape, "component_name": "result_shape", "start_time": 0.5, "duration": 0.5},
                 ],
-                "segment_duration": 1.0,
+                "segment_duration": 0.5,
+                "update_components": update_card
+            },
+            {
+                "name": "show_outcome",
+                "components": [
+                    {"component": result_shape, "component_name": "result_shape", "start_time": 0.0, "duration": 0.5},
+                ],
+                "segment_duration": 0.5,
                 "update_components": update_outcome
             },
             {
@@ -601,6 +630,7 @@ block_list = [
         ]
     },
     {
+        "name": "post_fixation",
         "repetitions": 1,
         "trial_type_list": [],
 
@@ -616,6 +646,7 @@ block_list = [
         ]
     },
     {
+        "name": "score_report",
         "repetitions": 1,
         "trial_type_list": [],
 
@@ -646,13 +677,15 @@ routineTimer = core.CountdownTimer()  # to track time remaining of each (non-sli
 for block in block_list:
 
     # set up handler to look after randomisation of conditions etc
-    trials = data.TrialHandler(nReps=block["repetitions"], method='sequential', 
+    trials = data.TrialHandler(nReps=1, method='sequential', 
         extraInfo=expInfo, originPath=-1,
-        trialList=None,
+        trialList=list(range(0,block["repetitions"])),
         seed=None, name='trials')
     thisExp.addLoop(trials)  # add the loop to the experiment
 
-    for trial_index in range(0, block["repetitions"]):
+    for trial_index in trials:
+
+        print(f"trial {trial_index}", file=sys.stderr)
 
         # update component parameters for each repeat
         if 'response_component' in block and block['response_component']:
@@ -776,22 +809,26 @@ for block in block_list:
             for thisComponent in block_segment_components:
                 if hasattr(thisComponent["component"], "setAutoDraw"):
                     thisComponent["component"].setAutoDraw(False)
-                trials.addData(thisComponent["component_name"]+".started",
+                trials.addData(block_segment["name"]+thisComponent["component_name"]+".started",
                     thisComponent["component"].tStartRefresh)
-                trials.addData(thisComponent["component_name"]+".stopped",
+                if not thisComponent["component"].tStopRefresh:
+                    thisComponent["component"].tStopRefresh = t
+                trials.addData(block_segment["name"]+thisComponent["component_name"]+".stopped",
                     thisComponent["component"].tStopRefresh)
-
-            # check responses
-            if "response_component" in block and block["response_component"]:
-                if block["response_component"].keys in ['', [], None]:  # No response was made
-                    block["response_component"].keys = None
-                trials.addData(block_segment["name"]+'.keys',block["response_component"].keys)
-                if block["response_component"].keys != None:  # we had a response
-                    trials.addData(block_segment["name"]+'.rt', block["response_component"].rt)
 
             # blocks that end on keypress are not non-slip safe, so reset the non-slip timer
             if "end_on_keypress" in block_segment and block_segment["end_on_keypress"] is True:
                 routineTimer.reset()
+
+        # check responses
+        if "response_component" in block and block["response_component"]:
+            if block["response_component"].keys in ['', [], None]:  # No response was made
+                block["response_component"].keys = None
+            trials.addData(block["name"]+'.keys',block["response_component"].keys)
+            if block["response_component"].keys != None:  # we had a response
+                trials.addData(block["name"]+'.rt', block["response_component"].rt)
+
+        thisExp.nextEntry()
 
 # completed blocks of trials
 
