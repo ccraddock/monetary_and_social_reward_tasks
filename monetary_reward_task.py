@@ -812,7 +812,7 @@ for block in block_list:
                 trials.addData(block_segment["name"]+thisComponent["component_name"]+".started",
                     thisComponent["component"].tStartRefresh)
                 if not thisComponent["component"].tStopRefresh:
-                    thisComponent["component"].tStopRefresh = t
+                    thisComponent["component"].tStopRefresh = tThisFlipGlobal
                 trials.addData(block_segment["name"]+thisComponent["component_name"]+".stopped",
                     thisComponent["component"].tStopRefresh)
 
