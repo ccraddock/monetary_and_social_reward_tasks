@@ -41,7 +41,7 @@ from psychopy.hardware import keyboard
 ###
 ###############################################################################
 SCREEN_RESOLUTION = [1920, 1080]
-FULLSCREEN = True
+FULLSCREEN = False
 LEFT_RESPONSE = '1'  # this is the button to press for a 'lower' guess
 RIGHT_RESPONSE = '2'  # this is the butto to press for a 'higher' guess
 SCANNER_TRIGGER = '5'
@@ -824,6 +824,7 @@ for block in block_list:
         if "response_component" in block and block["response_component"]:
             if block["response_component"].keys in ['', [], None]:  # No response was made
                 block["response_component"].keys = None
+                block["response_component"].rt = None
             trials.addData(block["name"]+'.keys',block["response_component"].keys)
             if block["response_component"].keys != None:  # we had a response
                 trials.addData(block["name"]+'.rt', block["response_component"].rt)
