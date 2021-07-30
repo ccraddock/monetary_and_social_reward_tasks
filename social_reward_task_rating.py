@@ -344,6 +344,8 @@ block_list = [
                 "components": [
                     {"component": center_text, "component_name": "thank_you", "start_time": 0.0, "duration": 300.0},
                     {"component": press_to_continue, "component_name": "continue", "start_time": 0.0, "duration": 300.0},
+                    {"component": key_resp_2, "component_name": "key_resp_2", "start_time": 0.0, "duration": 300.0}
+
                 ],
                 "update_components": update_thank_you,
                 "segment_duration": 300.0,

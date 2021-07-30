@@ -31,9 +31,9 @@ from psychopy.constants import (NOT_STARTED, STARTED, PLAYING, PAUSED,
 from numpy.random import permutation, choice as randchoice
 import os  # handy system and path functions
 import sys  # to get file system encoding
-
+from operator import itemgetter
 from psychopy.hardware import keyboard
-
+import json
 ###############################################################################
 ### CONFIGURATION PARAMETERS
 ###
@@ -47,6 +47,9 @@ RIGHT_RESPONSE = '2'  # this is the butto to press for a 'higher' guess
 SCANNER_TRIGGER = '5'
 ESCAPE_KEY = 'esc'
 
+image_path_prefix = "images/"
+image_files = []
+
 ###############################################################################
 ### Done with configuration parameters, do not modify anything past this 
 ### box.
@@ -58,8 +61,8 @@ os.chdir(_thisDir)
 
 # Store info about the experiment session
 psychopyVersion = '2021.2.0'
-expName = 'monetary_reward_task'  # from the Builder filename that created this script
-expInfo = {'participant': '', 'session': '001'}
+expName = 'social_reward_task_rating'  # from the Builder filename that created this script
+expInfo = {'participant': '', 'order': ['1', '2'], 'ratings file': '' }
 dlg = gui.DlgFromDict(dictionary=expInfo, sortKeys=False, title=expName)
 if dlg.OK == False:
     core.quit()  # user pressed cancel
@@ -67,8 +70,52 @@ expInfo['date'] = data.getDateStr()  # add a simple timestamp
 expInfo['expName'] = expName
 expInfo['psychopyVersion'] = psychopyVersion
 
+if expInfo['ratings file'] == '':
+    raise ValueError(f'{expName} requires a ratings file')
+
+if not os.path.isfile(expInfo['ratings file']):
+    raise ValueError(f'{expInfo["ratings file"]} does not exist')
+
+with open(expInfo['ratings file'], 'r') as infd:
+    user_ratings = json.load(infd)
+
+if 'male_positive' not in user_ratings or 'female_positive' not in user_ratings \
+    or 'male_ambiguous' not in user_ratings or 'female_ambiguous' not in user_ratings:
+    raise ValueError(f'Could not find pre-ratings in file {expInfo["ratings file"]}, is it the correct file?')
+
+positive_images = permutation([file_info[0] for file_info in user_ratings['male_positive'] + \
+    user_ratings['female_positive']]).tolist()
+
+ambiguous_images = permutation([file_info[0] for file_info in user_ratings['male_ambiguous'] + \
+    user_ratings['female_ambiguous']]).tolist()
+
+positive_block = ['P']*10 + ['A']*2
+ambiguous_block = ['A']*10 + ['P']*2
+inter_stimulus_intervals = [1, 3, 5, 7]*3
+
+block_design = []
+pos_index = 0
+amb_index = 0
+for index in range(0,8):
+    if (index + int(expInfo['order'])) % 2 == 0:
+        stim_indices = [ n % 16 for n in range(pos_index, pos_index+10)] + \
+            [ n % 16 for n in [amb_index, amb_index + 1]]
+        stim_infos = list(zip(positive_block, stim_indices, 
+            permutation(inter_stimulus_intervals).tolist()))
+        block_design += [('IBI', 0, 8)] + [stim_infos[index] for index in permutation(range(0,len(stim_infos)))]
+        pos_index = (pos_index + 10) % 16
+        amb_index = (amb_index + 2) % 16
+    else:
+        stim_indices = [ n % 16 for n in range(amb_index, amb_index+10)] + \
+            [ n % 16 for n in [pos_index, pos_index + 1]]
+        stim_infos = list(zip(ambiguous_block, stim_indices, 
+            permutation(inter_stimulus_intervals).tolist()))
+        block_design += [('IBI',0 ,8)] + [stim_infos[index] for index in permutation(range(0,len(stim_infos)))]
+        amb_index = (amb_index + 10) % 16
+        pos_index = (pos_index + 2) % 16
+
 # Data file name stem = absolute path + name later add .psyexp, .csv, .log, etc
-filename = _thisDir + os.sep + u'data/%s_%s_%s' % (expInfo['participant'], expName, expInfo['date'])
+filename = _thisDir + os.sep + f"data/{expInfo['participant']}_social_reward_{expInfo['date']}"
 
 # An ExperimentHandler isn't essential but helps with data saving
 thisExp = data.ExperimentHandler(name=expName, version='',
@@ -110,113 +157,44 @@ defaultKeyboard = keyboard.Keyboard()
 #### DEFINE STIMULUS BUIDLING BLOCKS
 ###############################################################################
 
-arrowVertices=[ [-0.2,0.05], [-0.2,-0.05], [0.0,-0.05], [0.0,-0.1], [0.2,0], [0.0,0.1],  [0.0,0.05] ]
-arrow = visual.ShapeStim(win, 
-                 lineColor='yellow',
-                 lineWidth=2.0, #in pixels
-                 fillColor='yellow', #beware, with convex shapes fill colors don't work
-                 vertices=arrowVertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [0,0], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
+positive_image_stim = []
 
-instructin_arrow_vertices=[ [-0.1,0.025], [-0.1,-0.025], [0.0,-0.025], [0.0,-0.05], [0.1,0], [0.0,0.05],  [0.0,0.025] ]
-down_arrow_instructions = visual.ShapeStim(win, 
-                 lineColor='yellow',
-                 lineWidth=2.0, #in pixels
-                 fillColor='yellow', #beware, with convex shapes fill colors don't work
-                 vertices=instructin_arrow_vertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [0.25,0.25], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
+for image_path in positive_images:
+    positive_image_stim.append(visual.ImageStim(win,
+        image=os.path.join(image_path_prefix, image_path), 
+        mask=None, 
+        units='', 
+        pos=(0.0, 0.0), 
+        size=None, 
+        ori=0.0, 
+        color=(1.0, 1.0, 1.0), 
+        colorSpace='rgb', 
+        contrast=1.0, 
+        opacity=None, 
+        depth=0))
 
-up_arrow_instructions = visual.ShapeStim(win, 
-                 lineColor='yellow',
-                 lineWidth=2.0, #in pixels
-                 fillColor='yellow', #beware, with convex shapes fill colors don't work
-                 vertices=instructin_arrow_vertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [-0.25,0.25], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=-90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
+ambiguous_image_stim = []
 
-lose_arrow_instructions = visual.ShapeStim(win, 
-                 lineColor='red',
-                 lineWidth=2.0, #in pixels
-                 fillColor='red', #beware, with convex shapes fill colors don't work
-                 vertices=instructin_arrow_vertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [0.375,0.25], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
+for image_path in ambiguous_images:
+    ambiguous_image_stim.append(visual.ImageStim(win,
+        image=os.path.join(image_path_prefix, image_path), 
+        mask=None, 
+        units='', 
+        pos=(0.0, 0.0), 
+        size=None, 
+        ori=0.0, 
+        color=(1.0, 1.0, 1.0), 
+        colorSpace='rgb', 
+        contrast=1.0, 
+        opacity=None, 
+        depth=0))
 
-no_change_instructions = visual.Circle(win,
-                 radius = 0.05,
-                 lineColor = 'yellow',
-                 lineWidth = 2.0,
-                 fillColor = 'yellow',
-                 pos = [0.25, 0.25],
-                 interpolate = True,
-                 opacity = 0.9,
-                 autoLog = False)
-
-win_arrow_instructions = visual.ShapeStim(win, 
-                 lineColor='green',
-                 lineWidth=2.0, #in pixels
-                 fillColor='green', #beware, with convex shapes fill colors don't work
-                 vertices=instructin_arrow_vertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [0.125,0.25], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=-90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
-
-lose_arrow = visual.ShapeStim(win, 
-                 lineColor='red',
-                 lineWidth=2.0, #in pixels
-                 fillColor='red', #beware, with convex shapes fill colors don't work
-                 vertices=arrowVertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [0,0], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
-
-win_arrow = visual.ShapeStim(win, 
-                 lineColor='green',
-                 lineWidth=2.0, #in pixels
-                 fillColor='green', #beware, with convex shapes fill colors don't work
-                 vertices=arrowVertices,#choose something from the above or make your own
-                 closeShape=True,#do you want the final vertex to complete a loop with 1st?
-                 pos= [0,0], #the anchor (rotaion and vertices are position with respect to this)
-                 interpolate=True,
-                 opacity=0.9,
-                 ori=-90,
-                 autoLog=False)#this stim changes too much for autologging to be useful
-
-no_change = visual.Circle(win,
-                 radius = 0.1,
-                 lineColor = 'yellow',
-                 lineWidth = 2.0,
-                 fillColor = 'yellow',
-                 pos = [0, 0],
-                 interpolate = True,
-                 opacity = 0.9,
-                 autoLog = False)
-
-result_shape = no_change
+image_background = visual.Rect(
+    win=win, name='card_outline',
+    width=1.0, height=0.8,
+    ori=0.0, pos=(0, 0),
+    lineWidth=15.0, colorSpace='rgb', lineColor='white', fillColor='white',
+    opacity=None, depth=0.0, interpolate=True)
 
 # Initialize components for Routine "instructions"
 press_to_continue = visual.TextStim(win=win, name='press_to_continue',
@@ -240,44 +218,6 @@ fixation_text = visual.TextStim(win=win, name='fixation_text',
 
 # Initialize components for Routine "decision"
 segment_clock = core.Clock()
-card_outline = visual.Rect(
-    win=win, name='card_outline',
-    width=0.36, height=0.5,
-    ori=0.0, pos=(0, 0),
-    lineWidth=15.0, colorSpace='rgb', lineColor='white', fillColor='white',
-    opacity=None, depth=0.0, interpolate=True)
-
-card_outline_instructions = visual.Rect(
-    win=win, name='card_outline',
-    width=0.18, height=0.25,
-    ori=0.0, pos=(0, 0.25),
-    lineWidth=15.0, colorSpace='rgb', lineColor='white', fillColor='white',
-    opacity=None, depth=0.0, interpolate=True)
-
-card_polygon = visual.Polygon(
-    win=win, name='card_outline',
-    radius=(0.18, 0.25),
-    edges = 8,
-    ori=0.0, pos=(0, 0),
-    lineWidth=1.0, colorSpace='rgb', lineColor='white', fillColor='black',
-    opacity=None, depth=0.0, interpolate=True)
-
-card_text = visual.TextStim(win=win, name='card_text',
-    text='?',
-    font='Open Sans',
-    pos=(0, 0), height=0.2, wrapWidth=None, ori=0.0, 
-    color='black', colorSpace='rgb', opacity=None, 
-    languageStyle='LTR',
-    depth=-1.0)
-
-card_text_instructions = visual.TextStim(win=win, name='card_text',
-    text='?',
-    font='Open Sans',
-    pos=(0, 0.25), height=0.05, wrapWidth=None, ori=0.0, 
-    color='black', colorSpace='rgb', opacity=None, 
-    languageStyle='LTR',
-    depth=-1.0)
-
 key_resp_2 = keyboard.Keyboard()
 
 # Initialize components for Routine "anticipation"
@@ -301,212 +241,65 @@ instructions_lower_text = visual.TextStim(win=win, name='text_4',
 #### FUNCTIONS FOR UPDATING THE STIMULI
 ###############################################################################
 
-def update_decision(trial_type, response_value, components, reward=None):
+
+
+def update_image(trial_type, response_value, components, reward=None):
     """
-    set things back to the baseline
+    choose the next image 
     """
-    card_text.setText("?")
 
-    return components, 0
+    global positive_image_stim
+    global ambiguous_image_stim
+    global image_background
 
-def update_anticipation(trial_type, response_value, components, reward=None):
-    """
-    There are 4 trial types:
-    1. reward, correct response
-    2. reward, incorrect response
-    3. loss, correct response
-    4. loss, incorrect response
-
-    The users response and the trial type are used to determine the value of the chosen card to match
-    the desired outcome.  
-    """
-    orientation = 0
-    if trial_type in [1, 2]:
-
-        orientation = -90
-
-    elif trial_type in [3, 4]:
-
-        orientation = 90
-
+    if trial_type[0] == 'IBI':
+        components = []
     else:
-        print(f"Incorrect trial type {trial_type}", file=sys.stderr)
-        raise ValueError
-
-    arrow.ori = orientation
-    arrow.lineColor = 'yellow'
-    arrow.fillColor = 'yellow'
-
-    return components, 0
-
-def update_outcome(trial_type, response_value, components, reward=None):
-    """
-    There are 4 trial types:
-    1. reward, correct response, win arrow
-    2. reward, incorrect response, no change
-    3. loss, correct response, no change
-    4. loss, incorrect response, lose arrow
-
-    The users response and the trial type are used to determine the value of the chosen card to match
-    the desired outcome.  
-    """
-
-    components.clear()
-
-    reward = 0
-    result_shape = no_change
-
-    print(f"calling update_outcome with {trial_type} {response_value} {reward}", file=sys.stderr)
-
-    if not response_value:
-        
-        center_text.setText("No response!")
-
-        components.append({"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 0.5})
-
-    else:
-
-        if trial_type == 1:
-            print(f"Setting result shape to win", file=sys.stderr)
-            reward = 1.0
-            result_shape = win_arrow
-
-        elif trial_type == 4:
-            print(f"Setting result shape to lose", file=sys.stderr)
-            reward = -0.5
-            result_shape = lose_arrow
-
-        components.append({"component": result_shape, "component_name": "result_shape", "start_time": 0.0, "duration": 0.5})
-
-    return components, reward
-
-def update_card(trial_type, response_value, components, reward=None):
-    """
-    There are 4 trial types:
-    1. reward, correct response, win arrow
-    2. reward, incorrect response, no change
-    3. loss, correct response, no change
-    4. loss, incorrect response, lose arrow
-
-    The users response and the trial type are used to determine the value of the chosen card to match
-    the desired outcome.  
-    """
-
-    if not response_value:
-        
-        card_value = randchoice(["1", "2", "3", "4", "5", "6", "7", "8", "9"])
-
-    else:
-        if trial_type in [1, 3]:
-            # the user was correct
-
-            if response_value == LEFT_RESPONSE:
-                # the chosen card value should be less than "5"
-                card_value = randchoice(["1", "2", "3", "4"])
-
-            elif response_value == RIGHT_RESPONSE:
-                # the chose card value should be greater than "5"
-                card_value = randchoice(["6", "7", "8", "9"])
-
-            else:
-                print(f"Incorrect response value {response_value}", file=sys.stderr)
-                raise ValueError
-
-        elif trial_type in [2, 4]:
-
-            # the user was WRONG
-
-            if response_value == LEFT_RESPONSE:
-                # the chosen card value should be greater than "5"
-                card_value = randchoice(["6", "7", "8", "9"])
-
-            elif response_value == RIGHT_RESPONSE:
-                # the chose card value should be less than "5"
-                card_value = randchoice(["1", "2", "3", "4"])
-
-            else:
-                print(f"Incorrect response value {response_value}", file=sys.stderr)
-                raise ValueError
-
+        if trial_type[0] == 'P':
+            this_image_stim = positive_image_stim[trial_type[1]]
+            image_background.fillColor = 'green'
+            image_background.lineColor = 'green'
         else:
-            print(f"Incorrect trial type {trial_type}", file=sys.stderr)
-            raise ValueError
+            this_image_stim = ambiguous_image_stim[trial_type[1]]
+            image_background.fillColor = 'white'
+            image_background.lineColor = 'white'
 
-    card_text.setText(card_value)
-
-    return components, 0.0
-
-
-def update_fixation(trial_type, response_value, components, reward=None):
-    """
-    set things back to the baseline
-    """
-    center_text.setText("+")
+        components = [
+            {"component": image_background, "component_name": "image_background", "start_time": 0.0, "duration": 3.0},
+            {"component": key_resp_2, "component_name": "key_resp_2", "start_time": 0.0, "duration": 3.0},
+            {"component": this_image_stim, "component_name": "image", "start_time": 0.0, "duration": 3.0}]
 
     return components, 0
 
-def update_reward(trial_type, response_value, components, reward=None):
-
-    if not reward or reward < 0:
-        reward = 0.0
-    center_text.setText(f"You won ${reward}")
+def update_thank_you(trial_type, response_value, components, reward=None):
+    center_text.setText("Thank you for playing our social game.")
 
     return components, 0
 
 def update_instructions(trial_type, response_value, components, reward=None):
 
+    global expInfo
     
     instructions_text = {
-        1: 'Hi-Lo Card Game\n\n You will have multiple attempts to win money by '
-           'guessing whether the next card drawn from a deck is higher or '
-           'lower than 5. The deck contains the cards 1, 2, 3, 4, 6, 7, 8, 9 and is '
-           'shuffled before each draw.',
-        2: 'When you see the queue card guess whether the next card '
-           'will be lower or higher than 5 using the buttons. Use the left button '
-           'to guess "lower" and the right button for "higher". Make sure to '
-           'respond before the queue card disappears.',
-        3: 'After you make your guess, you will see an arrow that indicates how much '
-           'you can win or lose for the attempt. An UP arrow means you will '
-           'win $1.00 if correct and $0.00 if incorrect. A DOWN arrow '
-           'means you will win $0.00 if correct and lose $0.50 if '
-           'incorrect.',
-        4: 'A card will be selected from the deck and displayed, followed '
-           'by a symbol to indicate the outcome. A green arrow means you won '
-           '$1.00, a red arrow means you lost $0.50, and a yellow circle means you '
-           'won $0.00. "No response" means you failed to make a guess in time.',
-        5: 'The total amount you won will be displayed at the end of the game.'
+        1: 'Social Game\n\n We showed your photo to other study participants '
+        'and asked them to rate your likability.', 
+        2: 'On the following screens you '
+        'will see photos of each of those participants on a colored background '
+        'that indicates their rating of you.  A green background means they '
+        'rated you as highly likable and a white background means that they have not '
+        'rated you yet.', 
+        3: 'Please pay attention to the faces in the photos and try to remember '
+        'who likes you and has not rated you. Please also press a button when '
+        'you see each photo.'
     }
+
 
     components = [{"component": key_resp_2, "component_name": "key_resp_2", "start_time": 0.0, "duration": 300.0},
                   {"component": press_to_continue, "component_name": "continue", "start_time": 0.0, "duration": 300.0}]
     
-    if trial_type == 1:
-        components.append({"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 300.0})
-        center_text.setText(instructions_text[trial_type])
-    elif trial_type == 2:
-        components.append({"component": card_outline_instructions, "component_name": "card_outline", "start_time": 0.0, "duration": 300.0})
-        components.append({"component": card_text_instructions, "component_name": "card_text", "start_time": 0.0, "duration": 300.0})
-        card_text.setText("?")
-        components.append({"component": instructions_lower_text, "component_name": "instructions_lower_text", "start_time": 0.0, "duration": 300.0})
-        instructions_lower_text.setText(instructions_text[trial_type])
-    elif trial_type == 3:
-        components.append({"component": up_arrow_instructions, "component_name": "up_arrow", "start_time": 0.0, "duration": 300.0})
-        components.append({"component": down_arrow_instructions, "component_name": "down_arrow", "start_time": 0.0, "duration": 300.0})
-
-        components.append({"component": instructions_lower_text, "component_name": "instructions_lower_text", "start_time": 0.0, "duration": 300.0})
-        instructions_lower_text.setText(instructions_text[trial_type])
-    elif trial_type == 4:
-        components.append({"component": lose_arrow_instructions, "component_name": "lose_arrow", "start_time": 0.0, "duration": 300.0})
-        components.append({"component": win_arrow_instructions, "component_name": "win_arrow", "start_time": 0.0, "duration": 300.0})
-        components.append({"component": no_change_instructions, "component_name": "no_change", "start_time": 0.0, "duration": 300.0})
-        components.append({"component": card_outline_instructions, "component_name": "card_outline", "start_time": 0.0, "duration": 300.0})
-        card_outline_instructions.pos = [-0.25, 0.25]
-        components.append({"component": card_text_instructions, "component_name": "card_text", "start_time": 0.0, "duration": 300.0})
-        card_text_instructions.pos = [-0.25, 0.25]
-        card_text_instructions.setText("8")
-        components.append({"component": instructions_lower_text, "component_name": "instructions_lower_text", "start_time": 0.0, "duration": 300.0})
-        instructions_lower_text.setText(instructions_text[trial_type])
-
+    components.append({"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 300.0})
+    center_text.setText(instructions_text[trial_type])
+  
     return components, 0
 
 def update_waiting_on_scanner(trial_type, response_value, components, reward=None):
@@ -514,16 +307,37 @@ def update_waiting_on_scanner(trial_type, response_value, components, reward=Non
     center_text.setText('Waiting on scanner ...')
     return components, 0
 
+first_trial_flag = True
+def update_fixation(trial_type, response_value, components, reward=None):
+
+    global center_text
+    global fixation_text
+    global first_trial_flag
+
+    components = []
+    if trial_type[0] == "IBI":
+        if first_trial_flag == True:
+            center_text.setText('Faces will begin to show in 8 seconds.')
+            first_trial_flag = False
+        else:
+            center_text.setText('Please take a short break. Faces will begin to show again in 8 seconds.')
+        components.append({"component": center_text, "component_name": "IBI_text", "start_time": 0.0, "duration": trial_type[2]})
+    else:
+        components.append({"component": fixation_text, "component_name": "fixation", "start_time": 0.0, "duration": trial_type[2]})
+
+    return components, 0
+
+
 ###############################################################################
 #### THIS IS THE TASK DESCRIPTION
 ###############################################################################
 block_list = [
     {
         "name": "instructions",
-        "repetitions": 4,
-        "trial_type_list": [1,2,3,4],
+        "repetitions": 3,
+        "trial_type_list": [1,2,3],
         "response_component": key_resp_2,
-        "valid_responses": [LEFT_RESPONSE, RIGHT_RESPONSE, "space"],
+        "valid_responses": ["space", LEFT_RESPONSE, RIGHT_RESPONSE],
 
         "segments": [
             {
@@ -539,7 +353,7 @@ block_list = [
             },
         ]
     },
-    {
+        {
         "name": "wait_for_scanner",
         "repetitions": 1,
         "trial_type_list": [],
@@ -560,107 +374,56 @@ block_list = [
         ]
     },
     {
-        "name": "pre_fixation",
-        "repetitions": 1,
-        "trial_type_list": [],
-
-        "segments": [
-            {
-                "name": "fixation",
-                "components": [
-                    {"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 20.0},
-                ],
-                "segment_duration": 20.0,
-                "update_components": update_fixation
-            },
-        ]
-    },
-    {
-        "name": "task_trial",
+        "name": "rate_images",
+        "repetitions": len(block_design),
+        "trial_type_list": block_design,
         "response_component": key_resp_2,
         "valid_responses": [LEFT_RESPONSE, RIGHT_RESPONSE],
-        "repetitions": 24,
-        "trial_type_list": permutation([1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4,1,2,3,4]),
 
         "segments": [
             {
-                "name": "decision",
+                "name": "show_image",
                 "components": [
-                    {"component": card_outline, "component_name": "card_outline", "start_time": 0.0, "duration": 4.0},
-                    {"component": card_text, "component_name": "card_text", "start_time": 0.0, "duration": 4.0},
-                    {"component": key_resp_2, "component_name": "key_resp_2", "start_time": 0.0, "duration": 4.0}
+                    {"component": image_background, "component_name": "image_background", "start_time": 0.0, "duration": 3.0},
+                    {"component": positive_image_stim[0], "component_name": "image", "start_time": 0.0, "duration": 3.0},
+                    {"component": key_resp_2, "component_name": "key_resp_2", "start_time": 0.0, "duration": 3.0}
                 ],
-                "segment_duration": 4.0,
-                "update_components": update_decision
+                "segment_duration": 3.0,
+                "update_components": update_image,
+                "end_on_keypress": False,
             },
-            {
-                "name": "anticipation",
-                "components": [
-                    {"component": arrow, "component_name": "anticipation_arrow", "start_time": 0.0, "duration": 6.0},
-
-                ],
-                "segment_duration": 6.0,
-                "update_components": update_anticipation
-            },
-            {
-                "name": "show_card",
-                "components": [
-                    {"component": card_outline, "component_name": "card_outline", "start_time": 0.0, "duration": 0.5},
-                    {"component": card_text, "component_name": "card_text", "start_time": 0.0, "duration": 0.5},
-                ],
-                "segment_duration": 0.5,
-                "update_components": update_card
-            },
-            {
-                "name": "show_outcome",
-                "components": [
-                    {"component": result_shape, "component_name": "result_shape", "start_time": 0.0, "duration": 0.5},
-                ],
-                "segment_duration": 0.5,
-                "update_components": update_outcome
-            },
-            {
-                "name": "ISI",
-                "components": [
-                    {"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 9.0},
-                ],
-                "segment_duration": 9.0,
-                "update_components": update_fixation
-            }
-        ]
-    },
-    {
-        "name": "post_fixation",
-        "repetitions": 1,
-        "trial_type_list": [],
-
-        "segments": [
             {
                 "name": "fixation",
                 "components": [
-                    {"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 20.0},
+                    {"component": fixation_text, "component_name": "fixation", "start_time": 0.0, "duration": 3.0},
                 ],
-                "segment_duration": 20.0,
-                "update_components": update_fixation
+                "segment_duration": None,
+                "update_components": update_fixation,
+                "end_on_keypress": False,
             },
         ]
     },
     {
-        "name": "score_report",
+        "name": "thank_you",
         "repetitions": 1,
-        "trial_type_list": [],
-
+        "response_component": key_resp_2,
+        "valid_responses": ["space", "esc"],
         "segments": [
             {
-                "name": "reward",
+                "name": "thank_you",
                 "components": [
-                    {"component": center_text, "component_name": "center_text", "start_time": 0.0, "duration": 120.0},
+                    {"component": center_text, "component_name": "thank_you", "start_time": 0.0, "duration": 300.0},
+                    {"component": press_to_continue, "component_name": "continue", "start_time": 0.0, "duration": 300.0},
+                    {"component": key_resp_2, "component_name": "key_resp_2", "start_time": 0.0, "duration": 300.0}
+
                 ],
-                "segment_duration": 120.0,
-                "update_components": update_reward
+                "update_components": update_thank_you,
+                "segment_duration": 300.0,
+                "end_on_keypress": True
             },
         ]
-    },
+    }
+
 ]
 
 ###############################################################################
@@ -685,8 +448,6 @@ for block in block_list:
 
     for trial_index in trials:
 
-        print(f"trial {trial_index}", file=sys.stderr)
-
         # update component parameters for each repeat
         if 'response_component' in block and block['response_component']:
             block['response_component'].keys = []
@@ -698,11 +459,18 @@ for block in block_list:
         else:
             trial_type = 0
 
+        trials.addData("trial_type", trial_type)
+
+
         for block_segment in block["segments"]:
 
             # ------Prepare to start segment -------
             continueRoutine = True
-            routineTimer.add(block_segment['segment_duration'])
+
+            if block_segment['segment_duration'] is not None:
+                routineTimer.add(block_segment['segment_duration'])
+            else:
+                routineTimer.add(trial_type[2])
 
             # update segment components
             reward = 0.0
@@ -724,8 +492,6 @@ for block in block_list:
 
             total_reward += reward
             
-            print(f"total reward: {total_reward}", file=sys.stderr)
-
             for thisComponent in block_segment_components:
                 thisComponent["component"].tStart = None
                 thisComponent["component"].tStop = None
@@ -837,7 +603,6 @@ for block in block_list:
 # and win.timeOnFlip() tasks get executed before quitting
 win.flip()
 
-# these shouldn't be strictly necessary (should auto-save)
 thisExp.saveAsWideText(filename+'.csv', delim='auto')
 thisExp.saveAsPickle(filename)
 logging.flush()
